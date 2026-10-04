@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# A release, from a tag: the binaries, their archives and checksums, the
+# GitHub release, and the multi-arch image on Docker Hub. The procedure is in
+# the release checklist; a dry run is `goreleaser release --snapshot --clean`.
+version: 2
+
+project_name: portlatch-agent
+
+builds:
+  - id: linux
+    main: ./cmd/portlatch-agent
+    binary: portlatch-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux]
+    goarch: [amd64, arm64, arm]
+    goarm: ["7"]
+
+  - id: windows
+    main: ./cmd/portlatch-agent
+    binary: portlatch-agent
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [windows]
+    goarch: [amd64]
+
+# No version in the names: releases/latest/download/<name> then always serves
+# the latest release, and the download page never changes its links.
+archives:
+  - id: linux
+    ids: [linux]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    files:
+      - README.md
+      - LICENSE
+      - NOTICE
+      - src: packaging/linux/portlatch-agent.service
+        dst: portlatch-agent.service
+
+  - id: windows
+    ids: [windows]
+    formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - NOTICE
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+
+dockers_v2:
+  - ids: [linux]
+    dockerfile: packaging/docker/Dockerfile
+    images: [portlatch/portlatch-agent]
+    platforms: [linux/amd64, linux/arm64, linux/arm/v7]
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}{{ .Major }}.{{ .Minor }}{{ end }}"
+      - "{{ if not .Prerelease }}{{ .Major }}{{ end }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    labels:
+      org.opencontainers.image.title: Portlatch agent
+      org.opencontainers.image.source: https://github.com/portlatch/portlatch-agent
+      org.opencontainers.image.url: https://portlatch.eu
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: Apache-2.0
+
+release:
+  github:
+    owner: portlatch
+    name: portlatch-agent
+  prerelease: auto
+
+changelog:
+  sort: asc

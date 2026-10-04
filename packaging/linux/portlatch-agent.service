@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The Portlatch agent as a systemd service. Install:
+#
+#   sudo install -m 0755 portlatch-agent /usr/local/bin/
+#   sudo install -m 0644 portlatch-agent.service /etc/systemd/system/
+#   sudo systemctl enable --now portlatch-agent
+#   journalctl -u portlatch-agent -f     # the enrolment code
+
+[Unit]
+Description=Portlatch agent
+Documentation=https://github.com/portlatch/portlatch-agent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/portlatch-agent
+# A user created for the service alone, never root; the key and the token live
+# in /var/lib/portlatch-agent, which survives restarts and upgrades.
+DynamicUser=yes
+StateDirectory=portlatch-agent
+StateDirectoryMode=0700
+Environment=PORTLATCH_DATA_DIR=%S/portlatch-agent
+
+Restart=on-failure
+RestartSec=10
+# 3: the agent was deleted from the dashboard, restarting would change nothing.
+RestartPreventExitStatus=3
+
+# The agent needs the network and its data directory, nothing else.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+/portlatch-agent
+/dist/
+/.data/
+
+.idea/
+.vscode/
+
+# Never, in a repository that promises the private key stays on the machine.
+*.key
+*.pem
+.env
+.env.*

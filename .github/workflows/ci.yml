@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# On every push and pull request: formatting, vet on both systems, tests, known
+# vulnerabilities, and the release configuration. Nothing is published.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The latest Go, not the minimum go.mod states: the standard library's
+      # security fixes only reach the binaries this way.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+
+      - name: Vet, Linux and Windows
+        run: |
+          go vet ./...
+          GOOS=windows go vet ./...
+
+      - name: Tests
+        run: go test ./...
+
+      - name: Known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Release configuration
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check

@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# On a tag vX.Y.Z: the binaries and the GitHub release, the image on Docker
+# Hub, and the README as its description. The tag must match the version in
+# the code, or nothing is published.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # DOCKERHUB_USERNAME (variable) and DOCKERHUB_TOKEN (secret) live there.
+    environment: CI
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # The latest Go, not the minimum go.mod states: the standard library's
+      # security fixes only reach the binaries this way.
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: The tag matches the version in the code
+        run: |
+          version=$(sed -n 's/^\s*Version = "\(.*\)"$/\1/p' internal/agent/config.go)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "The tag is $GITHUB_REF_NAME, the code says $version."
+            exit 1
+          fi
+
+      - name: Tests
+        run: go test ./...
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker Hub description
+        if: ${{ !contains(github.ref_name, '-') }}
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: portlatch/portlatch-agent
+          short-description: "Expose your homelab from behind CGNAT. WireGuard, no root, no config."
