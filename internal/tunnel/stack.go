@@ -22,6 +22,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
+	"gvisor.dev/gvisor/pkg/waiter"
 )
 
 const (
@@ -31,6 +32,9 @@ const (
 	// a mobile link: the buffers must not be what caps the window.
 	tcpBufferDefault = 1 << 20
 	tcpBufferMax     = 8 << 20
+
+	// The backlog gonet.ListenTCP uses
+	listenBacklog = 4096
 )
 
 // Stack is the userspace network the tunnel carries: a WireGuard device on
@@ -98,11 +102,32 @@ func newStack(address netip.Addr, mtu int) (*Stack, error) {
 
 // ListenTCP opens a listener inside the tunnel, invisible from the host.
 func (s *Stack) ListenTCP(addr netip.AddrPort) (net.Listener, error) {
-	return gonet.ListenTCP(s.stack, tcpip.FullAddress{
+	var wq waiter.Queue
+	ep, tcpErr := s.stack.NewEndpoint(tcp.ProtocolNumber, ipv4.ProtocolNumber, &wq)
+	if tcpErr != nil {
+		return nil, fmt.Errorf("listen tcp %s: %s", addr, tcpErr)
+	}
+
+	// SO_REUSEADDR: a retired listener's connections keep its port reserved
+	// until they are fully closed, and its replacement must bind it at once.
+	// The accepted connections inherit the flag, which is what lets it through.
+	ep.SocketOptions().SetReuseAddress(true)
+
+	full := tcpip.FullAddress{
 		NIC:  nicID,
 		Addr: tcpip.AddrFromSlice(addr.Addr().AsSlice()),
 		Port: addr.Port(),
-	}, ipv4.ProtocolNumber)
+	}
+	if tcpErr := ep.Bind(full); tcpErr != nil {
+		ep.Close()
+		return nil, fmt.Errorf("bind tcp %s: %s", addr, tcpErr)
+	}
+	if tcpErr := ep.Listen(listenBacklog); tcpErr != nil {
+		ep.Close()
+		return nil, fmt.Errorf("listen tcp %s: %s", addr, tcpErr)
+	}
+
+	return gonet.NewTCPListener(s.stack, &wq, ep), nil
 }
 
 // The tun.Device half, what wireguard-go reads from and writes to.
