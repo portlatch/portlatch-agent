@@ -36,7 +36,9 @@ PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK: wireguard-go listens to route changes to keep its sticky sockets
+# on the right source address; without it the bind fails with EAFNOSUPPORT.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 

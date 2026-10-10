@@ -20,7 +20,7 @@ var (
 	defaultDataDir = ".data"
 
 	// Version is what the heartbeat reports.
-	Version = "1.0.1"
+	Version = "1.0.2"
 )
 
 type Config struct {
